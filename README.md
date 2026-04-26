@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Isabel Market
 
-## Getting Started
+Marketplace premium para compra y venta de antiguedades, construido con Next.js,
+React, Supabase, Three.js y Mercado Pago marketplace split payments.
 
-First, run the development server:
+## Stack
+
+- Frontend y BFF Node.js: Next.js 16, React 19, TypeScript.
+- Datos, Auth, Storage, RLS y Edge Functions: Supabase.
+- Pagos: Mercado Pago Checkout Pro con OAuth por vendedor y `marketplace_fee`.
+- Visual: Tailwind CSS, liquid glass UI, Three.js lazy-loaded.
+
+## Setup local
+
+1. Copia `.env.example` a `.env.local`.
+2. Crea un proyecto Supabase y ejecuta `supabase/migrations/001_isabel_market_schema.sql`.
+3. Configura Auth por email y Phone Auth con un proveedor SMS en Supabase.
+4. Carga las variables de Mercado Pago y registra el webhook:
+   `/api/webhooks/mercadopago`.
+5. Instala y ejecuta:
+
+```bash
+npm install
+npm run dev
+```
+
+## Scripts
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run build
+npm run lint
+npm run typecheck
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Rutas principales
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `/`: marketplace y feed.
+- `/auth`: email o telefono.
+- `/onboarding`: perfil obligatorio.
+- `/sell/new`: crear publicacion.
+- `/products/[id]`: detalle.
+- `/seller/[id]`: perfil publico.
+- `/me`: perfil privado, publicaciones y Mercado Pago OAuth.
+- `/admin`: moderacion, usuarios, ordenes y comisiones.
+- `/checkout/[productId]`: compra.
+- `/payment-result`: retorno de Mercado Pago.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Supabase
 
-## Learn More
+La migracion crea tablas, enums, triggers, vistas, buckets y RLS:
 
-To learn more about Next.js, take a look at the following resources:
+- `profiles`, `products`, `product_images`, `likes`, `orders`.
+- `seller_payment_accounts`, `admin_actions`, `webhook_events`.
+- Buckets: `avatars`, `product-images-private`, `product-images-public`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Mercado Pago
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+El flujo productivo esta en Route Handlers Node.js:
 
-## Deploy on Vercel
+- `GET /api/mercadopago/oauth/start`
+- `GET /api/mercadopago/oauth/callback`
+- `POST /api/checkout`
+- `POST /api/webhooks/mercadopago`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Tambien hay Edge Functions equivalentes en `supabase/functions`.

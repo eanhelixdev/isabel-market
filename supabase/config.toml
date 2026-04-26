@@ -1,0 +1,16 @@
+project_id = "isabel-market"
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.mercadopago-webhook]
+verify_jwt = false
+
+[functions.mp-oauth-callback]
+verify_jwt = false
+
+[functions.admin-moderate-product]
+verify_jwt = true
+
+[functions.recalculate-reputation]
+verify_jwt = true
