@@ -1,6 +1,7 @@
 import "server-only";
 
 import { demoProducts, demoSeller, getDemoProduct } from "@/lib/demo-data";
+import { hasSupabaseEnv } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ProductCard, ProductDetail, SellerPublicProfile } from "@/types/marketplace";
@@ -47,7 +48,10 @@ export async function getMarketplaceProducts(filters: ProductFilters = {}) {
   }
 
   const { data, error } = await query;
-  if (error || !data) return filterDemoProducts(filters);
+  if (error || !data) {
+    logSupabaseError("marketplace products", error);
+    return shouldUseDemoFallback() ? filterDemoProducts(filters) : [];
+  }
   return signProductCards(data as ProductCard[]);
 }
 
@@ -55,25 +59,34 @@ export async function getProductDetail(id: string): Promise<ProductDetail | null
   const supabase = await createServerSupabaseClient();
   if (!supabase) return getDemoProduct(id);
 
-  const { data: product } = await supabase
+  const { data: product, error: productError } = await supabase
     .from("product_cards")
     .select("*")
     .eq("id", id)
     .maybeSingle();
 
-  if (!product) return getDemoProduct(id);
+  if (productError) {
+    logSupabaseError("product detail", productError);
+    return shouldUseDemoFallback() ? getDemoProduct(id) : null;
+  }
 
-  const { data: rawProduct } = await supabase
+  if (!product) return shouldUseDemoFallback() ? getDemoProduct(id) : null;
+
+  const { data: rawProduct, error: rawProductError } = await supabase
     .from("products")
     .select("material, dimensions, origin_story, rejection_reason")
     .eq("id", id)
     .maybeSingle();
 
-  const { data: images } = await supabase
+  if (rawProductError) logSupabaseError("product metadata", rawProductError);
+
+  const { data: images, error: imagesError } = await supabase
     .from("product_images")
     .select("id, image_url, sort_order")
     .eq("product_id", id)
     .order("sort_order", { ascending: true });
+
+  if (imagesError) logSupabaseError("product images", imagesError);
 
   const signedImages = await signImages(images ?? []);
 
@@ -94,20 +107,25 @@ export async function getSellerPublicProfile(
   const supabase = await createServerSupabaseClient();
   if (!supabase) return demoSeller;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("seller_public_profiles")
     .select("*")
     .eq("id", sellerId)
     .maybeSingle();
 
-  return (data as SellerPublicProfile | null) ?? demoSeller;
+  if (error) {
+    logSupabaseError("seller profile", error);
+    return shouldUseDemoFallback() ? demoSeller : null;
+  }
+
+  return (data as SellerPublicProfile | null) ?? (shouldUseDemoFallback() ? demoSeller : null);
 }
 
 export async function getSellerProducts(sellerId: string) {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return demoProducts.filter((product) => product.seller_id === sellerId);
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("product_cards")
     .select("*")
     .eq("seller_id", sellerId)
@@ -115,7 +133,23 @@ export async function getSellerProducts(sellerId: string) {
     .order("approved_at", { ascending: false })
     .limit(24);
 
+  if (error) {
+    logSupabaseError("seller products", error);
+    return shouldUseDemoFallback()
+      ? demoProducts.filter((product) => product.seller_id === sellerId)
+      : [];
+  }
+
   return signProductCards((data as ProductCard[] | null) ?? []);
+}
+
+function shouldUseDemoFallback() {
+  return !hasSupabaseEnv();
+}
+
+function logSupabaseError(scope: string, error: unknown) {
+  if (!error) return;
+  console.error(`[isabel-market] Supabase ${scope} failed`, error);
 }
 
 function filterDemoProducts(filters: ProductFilters) {
